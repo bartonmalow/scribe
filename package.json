@@ -36,7 +36,7 @@
         "dotenv": "^16.4.5",
         "express": "4.21.1",
         "express-bunyan-logger": "1.2.0",
-        "luxon": "3.4.4",
+        "luxon": "3.5.0",
         "mkdirp": "3.0.1",
         "node-fetch": "3.3.2",
         "pg-promise": "10.15.4",
