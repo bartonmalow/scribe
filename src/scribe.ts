@@ -1,3 +1,4 @@
+import { Signer } from "@aws-sdk/rds-signer"
 import { RedisClientType } from "@redis/client"
 import Ajv from "ajv"
 import { diff_match_patch } from "diff-match-patch"
@@ -41,6 +42,9 @@ const argv = yargs(hideBin(process.argv))
         alias: "port",
         default: 1337
     })
+    .option("useIamConnection", {
+        default: false
+    })
     .option("dbHost", {
         default: "localhost"
     })
@@ -55,6 +59,9 @@ const argv = yargs(hideBin(process.argv))
     })
     .option("dbName", {
         default: "scribe"
+    })
+    .option("useSSL", {
+        default: false
     })
     .option("requireSchema", {
         default: false
@@ -84,11 +91,42 @@ interface ComponentSchema {
     validator: Ajv.ValidateFunction
 }
 
-const dbCreateConfig = {
-    user: argv.dbUser,
-    password: argv.dbPass,
-    port: argv.dbPort,
-    host: argv.dbHost
+const dbConnectionConfig = async () => {
+    let pass: string | (() => Promise<string>) = argv.dbPass
+    // NOTE: If you want strict cert checking this should be updated to take paths to ca certs
+    // https://node-postgres.com/features/ssl#self-signed-cert
+    let ssl = argv.useSSL
+        ? {
+              rejectUnauthorized: false
+          }
+        : undefined
+
+    if (argv.useIamConnection) {
+        try {
+            const signer = new Signer({
+                hostname: argv.dbHost,
+                port: argv.dbPort,
+                username: argv.dbUser
+            })
+
+            pass = () => signer.getAuthToken()
+            // NOTE: https://github.com/brianc/node-postgres/issues/1843
+            // NOTE: https://github.com/brianc/node-postgres/issues/2009
+            ssl = {
+                rejectUnauthorized: false
+            }
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
+    return {
+        user: argv.dbUser,
+        password: pass,
+        port: argv.dbPort,
+        host: argv.dbHost,
+        ssl
+    }
 }
 
 /**
@@ -96,7 +134,7 @@ const dbCreateConfig = {
  */
 export async function tryCreateDb(): Promise<void> {
     try {
-        const res = await pgtools.createdb(dbCreateConfig, argv.dbName)
+        const res = await pgtools.createdb(await dbConnectionConfig(), argv.dbName)
         console.log(res)
     } catch (err) {
         const error = err as PgtoolsError
@@ -108,7 +146,7 @@ export async function tryCreateDb(): Promise<void> {
  * @param schemaOverride
  */
 export async function createServer(schemaOverride: any = undefined): Promise<Server> {
-    const dbConnectConfig = Object.assign({}, dbCreateConfig, {
+    const dbConnectConfig = Object.assign({}, await dbConnectionConfig(), {
         database: argv.dbName
     })
 
