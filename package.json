@@ -29,6 +29,7 @@
     },
     "homepage": "https://github.com/flypapertech/scribe#readme",
     "dependencies": {
+        "@aws-sdk/rds-signer": "^3.699.0",
         "@redis/client": "^1.6.0",
         "@aws-sdk/rds-signer": "^3.691.0",
         "ajv": "6.12.6",
